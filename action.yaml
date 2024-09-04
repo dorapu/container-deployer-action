@@ -1,0 +1,19 @@
+name: container deployer action
+description: a custom github action container deployer for durapu
+inputs:
+  registry:
+    required: true
+    description: a github username or organization name for the publishing target
+  username:
+    required: true
+    description: a github username used for the docker login command
+  password:
+    required: true
+    description: a github access token used for publishing the container and fetching its tag list from ghcr
+runs:
+  using: docker
+  image: Dockerfile
+  env:
+    GH_REGISTRY: ${{ inputs.registry }}
+    GH_USERNAME: ${{ inputs.username }}
+    GH_PASSWORD: ${{ inputs.password }}
