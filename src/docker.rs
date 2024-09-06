@@ -214,5 +214,5 @@ fn format_stderr(stderr: Vec<u8>) -> String {
         }
     }
 
-    output
+    output.trim().to_string()
 }

@@ -1,20 +1,19 @@
-name: CI
-run-name: running dry run mode for ${{ github.sha }} by @${{ github.actor }}
+name: CD
+run-name: trigger deployment process for ${{ github.sha }} by @${{ github.actor }}
 on:
-  pull_request:
+  push:
     branches:
       - master
 jobs:
-  dry-run:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: check out repository code
         uses: actions/checkout@v4
-      - name: running dry run mode
+      - name: running deployment
         uses: ./
         with:
           config-file: deploy.toml
-          dry-run: true
         env:
           GHCR_HOSTNAME: ${{ vars.GHCR_HOSTNAME }}
           GHCR_USERNAME: ${{ vars.GHCR_USERNAME }}
