@@ -1,0 +1,20 @@
+name: demo
+run-name: running demo for ${{ github.sha }} by @${{ github.actor }}
+on:
+  pull_request:
+    branches:
+      - master
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: check out repository code
+        uses: actions/checkout@v4
+      - name: running dry run mode
+        uses: docker://ghcr.io/dorapu/container-deployer-action:v0.1.0
+        env:
+          CONFIG_FILE: deploy.toml
+          DRY_RUN: true
+          GHCR_HOSTNAME: ${{ vars.GHCR_HOSTNAME }}
+          GHCR_USERNAME: ${{ vars.GHCR_USERNAME }}
+          GHCR_PASSWORD: ${{ secrets.GHCR_PASSWORD }}
