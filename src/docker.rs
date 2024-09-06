@@ -169,7 +169,10 @@ pub fn check() {
 }
 
 pub fn login(hostname: String, username: String, password: String) -> bool {
-    println!("  -> logging in to ghcr.io with username \"{}\":", username);
+    println!(
+        "  -> logging in to \"{}\" with username \"{}\":",
+        hostname, username
+    );
     println!(
         "    -> echo <REDACTED> | docker login {} -u {} --password-stdin",
         hostname, username

@@ -170,7 +170,13 @@ impl DeploymentConfig {
             return String::new();
         }
 
-        let original_value = registry.get(key).unwrap().as_str().unwrap().to_string();
+        let original_value = registry
+            .get(key)
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .trim()
+            .to_string();
 
         if original_value.is_empty() {
             errors.push(format!("{} field is empty.", key));

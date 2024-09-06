@@ -1,13 +1,13 @@
 name: container deployer action
 description: a custom github action container deployer for dorapu
 inputs:
-  config_file:
+  config-file:
     required: true
     description: >
       config file name to be looked up to. must be a TOML file.
       for example, "deploy.toml"
     default: deploy.toml
-  dry_run:
+  dry-run:
     required: false
     description: >
       determine whether it is a dry run mode.
@@ -16,5 +16,5 @@ runs:
   using: docker
   image: Dockerfile
   env:
-    CONFIG_FILE: ${{ inputs.config_file }}
-    DRY_RUN: ${{ inputs.dry_run }}
+    CONFIG_FILE: ${{ inputs.config-file }}
+    DRY_RUN: ${{ inputs.dry-run }}

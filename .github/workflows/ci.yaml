@@ -1,0 +1,24 @@
+name: CI
+run-name: running dry run mode for ${{ github.sha }} by @${{ github.actor }}
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: check out repository code
+        uses: actions/checkout@v4
+      - name: running dry run mode
+        uses: ./
+        with:
+          config-file: deploy.toml
+          dry-run: true
+        env:
+          GHCR_HOSTNAME: ${{ vars.GHCR_HOSTNAME }}
+          GHCR_USERNAME: ${{ vars.GHCR_USERNAME }}
+          GHCR_PASSWORD: ${{ secrets.GHCR_PASSWORD }}
