@@ -1,6 +1,6 @@
 # Container Deployer Action
 
-A custom GitHub Action container deployer for durapu.
+A custom GitHub Action container deployer for Dorapu.
 
 ## License
 

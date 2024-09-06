@@ -1,104 +1,153 @@
+use base64::Engine;
+use serde::Deserialize;
 use std::{
     process::{self},
     str::FromStr,
 };
 
+#[derive(Debug, Deserialize)]
+struct TagListResponse {
+    pub tags: Vec<String>,
+}
+
 pub struct Docker {
     path: String,
-    registry: String,
+    source: String,
+    hostname: String,
+    password: String,
+    repository: String,
     image: String,
-    version: String,
+    tag: String,
     hash: String,
 }
 
 impl Docker {
-    pub fn new(path: String, registry: String, image: String, version: String) -> Self {
+    pub fn new(
+        path: String,
+        source: String,
+        hostname: String,
+        password: String,
+        repository: String,
+        image: String,
+        tag: String,
+    ) -> Self {
         Self {
             path,
-            registry,
+            source,
+            hostname,
+            password,
+            repository,
             image,
-            version,
+            tag,
             hash: String::new(),
         }
     }
 
+    pub fn tag_list(&self) -> Vec<String> {
+        let client = reqwest::blocking::Client::new();
+        let endpoint = format!(
+            "https://{}/v2/{}/{}/tags/list",
+            self.hostname, self.repository, self.image
+        );
+        let token = base64::prelude::BASE64_STANDARD.encode(self.password.as_str());
+        let token = format!("Bearer {}", token);
+        let response = client
+            .get(endpoint)
+            .header(reqwest::header::AUTHORIZATION, token)
+            .send()
+            .unwrap();
+
+        if response.status().is_success() {
+            let response: TagListResponse = response.json().unwrap();
+            response.tags
+        } else {
+            vec![]
+        }
+    }
+
     pub fn build(&mut self) {
-        println!(
-            "building image \"ghcr.io/{}/{}\" in \"{}\":",
-            self.registry, self.image, self.path
-        );
-
         let command = format!(
-            "docker build -q -t ghcr.io/{}/{} -f Containerfile .",
-            self.registry, self.image
+            "docker build -q -t {}/{}/{} -f {} .",
+            self.hostname, self.repository, self.image, self.source
         );
-        println!("  -> {}", command);
+        println!("    -> {}", command);
 
-        let command = self.exec(command);
+        let command = process::Command::new("sh")
+            .arg("-c")
+            .current_dir(self.path.as_str())
+            .arg(command)
+            .output()
+            .unwrap();
 
         if command.status.success() {
             let image_sha = String::from_utf8(command.stdout).unwrap();
             let image_sha = image_sha.trim();
             self.hash = String::from_str(image_sha).unwrap();
 
-            println!("  -> done ({})", image_sha);
+            println!("    -> done ({})", image_sha);
         } else {
-            println!("  -> error:");
+            println!("    -> error:");
             println!("{}", format_stderr(command.stderr));
         }
     }
 
     pub fn tag(&self) {
-        println!(
-            "tagging latest image \"ghcr.io/{}/{}\" with tag \"{}\":",
-            self.registry, self.image, self.version
-        );
+        if self.hash.is_empty() {
+            return;
+        }
 
         let command = format!(
-            "docker tag {} ghcr.io/{}/{}:{}",
-            self.hash, self.registry, self.image, self.version
+            "docker tag {} {}/{}/{}:{}",
+            self.hash, self.hostname, self.repository, self.image, self.tag
         );
-        println!("  -> {}", command);
+        println!("    -> {}", command);
 
-        let command = self.exec(command);
-
-        if command.status.success() {
-            println!("  -> done");
-        } else {
-            println!("  -> error:");
-            println!("{}", format_stderr(command.stderr));
-        }
+        self.exec(command);
     }
 
     pub fn push(&self) {
-        println!(
-            "pushing tagged image \"ghcr.io/{}/{}:{}\":",
-            self.registry, self.image, self.version
-        );
+        if self.hash.is_empty() {
+            return;
+        }
 
         let command = format!(
-            "docker push ghcr.io/{}/{}:{}",
-            self.registry, self.image, self.version
+            "docker push {}/{}/{}:{}",
+            self.hostname, self.repository, self.image, self.tag
         );
-        println!("  -> {}", command);
+        println!("    -> {}", command);
 
-        let command = self.exec(command);
-
-        if command.status.success() {
-            println!("  -> done");
-        } else {
-            println!("  -> error:");
-            println!("{}", format_stderr(command.stderr));
-        }
+        self.exec(command);
     }
 
-    fn exec(&self, command: String) -> process::Output {
-        process::Command::new("sh")
+    pub fn cleanup(&self) {
+        if self.hash.is_empty() {
+            return;
+        }
+
+        let command = format!("docker rmi {} -f", self.hash);
+        println!("    -> {}", command);
+
+        self.exec(command);
+    }
+
+    pub fn has_hash(&self) -> bool {
+        !self.hash.is_empty()
+    }
+
+    fn exec(&self, command: String) {
+        let command = process::Command::new("sh")
             .arg("-c")
             .current_dir(self.path.as_str())
             .arg(command)
             .output()
-            .unwrap()
+            .unwrap();
+
+        if command.status.success() {
+            println!("    -> done");
+        } else {
+            println!("    -> error:");
+            println!("{}", format_stderr(command.stderr));
+        }
     }
 }
 
@@ -119,16 +168,16 @@ pub fn check() {
     println!("it is.");
 }
 
-pub fn login(username: String, password: String) {
-    println!("logging to ghcr.io with username \"{}\":", username);
+pub fn login(hostname: String, username: String, password: String) -> bool {
+    println!("  -> logging in to ghcr.io with username \"{}\":", username);
     println!(
-        "  -> echo <REDACTED> | docker login ghcr.io -u {} --password-stdin",
-        username
+        "    -> echo <REDACTED> | docker login {} -u {} --password-stdin",
+        hostname, username
     );
 
     let command = format!(
-        "echo {} | docker login ghcr.io -u {} --password-stdin",
-        password, username
+        "echo {} | docker login {} -u {} --password-stdin",
+        password, hostname, username
     );
     let command = process::Command::new("sh")
         .arg("-c")
@@ -138,11 +187,14 @@ pub fn login(username: String, password: String) {
 
     if command.status.success() {
         let output = String::from_utf8(command.stdout).unwrap();
-        println!("  -> done ({})", output.trim());
+        println!("    -> done ({})", output.trim());
+
+        true
     } else {
-        println!("  -> error:");
+        println!("    -> failed. will skip all images that use this credential. error:");
         println!("{}", format_stderr(command.stderr));
-        panic!("unable to login!");
+
+        false
     }
 }
 
@@ -154,7 +206,7 @@ fn format_stderr(stderr: Vec<u8>) -> String {
     for split in splits {
         let split = split.trim();
         if !split.is_empty() {
-            let split = format!("      {}\n", split);
+            let split = format!("        {}\n", split);
             output.push_str(split.as_str());
         }
     }

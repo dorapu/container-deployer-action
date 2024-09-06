@@ -1,0 +1,18 @@
+[registries.ghcr]
+hostname = "GHCR_HOSTNAME"
+username = "GHCR_USERNAME"
+password = "GHCR_PASSWORD"
+
+[registries.ghcr.images.latest]
+source = "Dockerfile"
+repository = "dorapu"
+name = "container-deployer-action"
+tag = "latest"
+replace = true
+
+[registries.ghcr.images.tagged]
+source = "Dockerfile"
+repository = "dorapu"
+name = "container-deployer-action"
+tag = "v0.1.0"
+replace = true

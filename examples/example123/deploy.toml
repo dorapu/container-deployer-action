@@ -1,0 +1,24 @@
+[registries.ghcr]
+hostname = "GHCR_HOSTNAME"
+username = "GHCR_USERNAME"
+password = "GHCR_PASSWORD"
+
+[registries.ghcr.images.latest]
+source = "Containerfile"
+repository = "dorapu"
+name = "example123"
+tag = "latest"
+replace = true
+
+[registries.ghcr.images.tagged]
+source = "Containerfile"
+repository = "dorapu"
+name = "example123"
+tag = "v2024.9.5"
+
+[registries.ghcr.images.ignored]
+ignore = true
+repository = "dorapu"
+source = "Containerfile"
+name = "example123"
+tag = "ignored"

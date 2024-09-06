@@ -1,68 +1,93 @@
-use std::{env, path::Path, str::FromStr};
-
-mod containerfile;
+mod config;
 mod docker;
-mod ghcr;
 mod util;
 
-use containerfile::Containerfile;
 use docker::Docker;
-use ghcr::Ghcr;
 
 fn main() {
     docker::check();
-    docker::login(get_env("GH_USERNAME"), get_env("GH_PASSWORD"));
 
-    let ghcr = Ghcr::new(get_env("GH_REGISTRY"));
-    let containerfile = Containerfile::new();
+    let app_config = config::AppConfig::lookup();
+    let deployment_config = config::DeploymentConfig::lookup(app_config.config_file);
+    let mut error_count = 0;
 
-    for path in containerfile.paths {
-        println!("processing \"{}\":", path);
+    for (name, registries) in deployment_config.registries {
+        println!("starting the deployment process for \"{}\" registry:", name);
 
-        let splits = path.clone();
-        let splits: Vec<&str> = splits.split('/').collect();
-        let version_path = path.clone() + "/version";
-        let version_path = Path::new(version_path.as_str());
-        let image = splits.last().unwrap();
-        let mut version = String::new();
-        let mut exists = false;
-
-        if version_path.exists() {
-            let content = std::fs::read_to_string(version_path).unwrap();
-            version.push_str(content.trim());
-        }
-
-        if !version.is_empty() {
-            let tags = ghcr.list_tags(image.to_string());
-            exists = tags.contains(&version);
-        }
-
-        println!("  -> image = {}", image);
-        println!("  -> version = {}", version);
-        println!("  -> exists = {}", exists);
-
-        if exists {
-            println!("  -> skipped");
+        if registries.is_empty() {
+            println!("  -> skipped. there is no image config.");
         } else {
-            let mut docker = Docker::new(
-                path,
-                get_env("GH_REGISTRY"),
-                String::from_str(image).unwrap(),
-                version,
-            );
+            let first_registry = registries.first().unwrap();
+            let hostname = first_registry.hostname.clone();
+            let username = first_registry.username.clone();
+            let password = first_registry.password.clone();
 
-            docker.build();
-            docker.tag();
-            docker.push();
+            if !docker::login(hostname, username, password) {
+                continue;
+            }
+        }
+
+        for registry in registries {
+            for image in registry.images {
+                println!(
+                    "  -> processing image \"{}\" with tag \"{}\":",
+                    image.name, image.tag
+                );
+
+                if image.ignore {
+                    println!("    -> set as to ignore by the config. ignored.");
+                } else {
+                    let mut docker = Docker::new(
+                        image.path,
+                        image.source,
+                        registry.hostname.clone(),
+                        registry.password.clone(),
+                        image.repository,
+                        image.name,
+                        image.tag.clone(),
+                    );
+                    let mut publish = true;
+
+                    if !image.replace {
+                        let tags = docker.tag_list();
+                        if tags.contains(&image.tag) {
+                            publish = false;
+                        }
+                    }
+
+                    if publish {
+                        docker.build();
+
+                        if is_dry_run() {
+                            println!("    -> dry run mode: no more action.");
+                        } else {
+                            docker.tag();
+                            docker.push();
+                        }
+
+                        docker.cleanup();
+
+                        if !docker.has_hash() {
+                            error_count += 1;
+                        }
+                    } else {
+                        println!("    -> will not publish since tag already exist. \"replace\" field config is set to false.");
+                    }
+                }
+            }
         }
     }
 
-    println!("all done.");
+    if error_count > 0 {
+        panic!("found error.");
+    } else {
+        println!("all done.");
+    }
 }
 
-fn get_env(key: &'static str) -> String {
-    match env::var(key) {
-        Ok(value) => value,
-        Err(error) => panic!("unable to get {} => {}", key, error.to_string()),
+fn is_dry_run() -> bool {
+    match std::env::var("DRY_RUN") {
+        Ok(value) => value == "true",
+        Err(_) => false,
     }
 }
